@@ -22,10 +22,6 @@ MACHINE_COST = {
     'Robot': 19.79,
     'Autoclave': 49.98
 }
-# Hiển thị logo trong giao diện
-logo = Image.open("triac_logo.png")
-st.image(logo, width=150)  # bạn có thể chỉnh width nếu cần
-
 st.set_page_config(page_title="Cost Estimation Tool", layout="wide")
 st.title("Triac Project Budget Monitor")
 
