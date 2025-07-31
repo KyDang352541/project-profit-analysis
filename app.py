@@ -15,12 +15,12 @@ import plotly.io as pio
 
 
 # === Constants ===
-LABOR_COST_WORKER = 13.41
-LABOR_COST_OFFICE = 31.25
+LABOR_COST_WORKER = 10
+LABOR_COST_OFFICE = 10
 MACHINE_COST = {
-    'CNC': 18.33,
-    'Robot': 19.79,
-    'Autoclave': 49.98
+    'CNC': 10,
+    'Robot': 10,
+    'Autoclave': 10
 }
 st.set_page_config(page_title="Cost Estimation Tool", layout="wide")
 st.title("Project Budget Monitor")
