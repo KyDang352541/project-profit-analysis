@@ -23,7 +23,7 @@ MACHINE_COST = {
     'Autoclave': 49.98
 }
 st.set_page_config(page_title="Cost Estimation Tool", layout="wide")
-st.title("Triac Project Budget Monitor")
+st.title("Project Budget Monitor")
 
 # === Project Info ===
 st.markdown("### 📁 Project Information")
