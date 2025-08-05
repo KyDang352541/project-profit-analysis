@@ -87,12 +87,12 @@ act_total_with_extra = act_total + warranty_cost + afterwork_cost
 
 # === Handling missing estimate or actual total
 if est_total == 0 or act_total_with_extra == 0:
-    st.warning("⚠️ Một trong hai phần Estimated hoặc Actual không có dữ liệu. Vui lòng nhập thủ công để so sánh.")
+    st.warning("⚠️ Either Estimated or Actual has no data. Please enter manually to compare..")
     if est_total == 0:
-        est_total = parse_number_input("🟢 Nhập thủ công tổng giá bán ước tính (Estimated Total)")
+        est_total = parse_number_input("🟢 Manually enter estimated total selling price (Estimated Total)")
         est_cost = {}
     if act_total_with_extra == 0:
-        act_total_with_extra = parse_number_input("🔴 Nhập thủ công tổng chi phí thực tế (Actual Total)")
+        act_total_with_extra = parse_number_input("🔴 Manually enter actual total cost (Actual Total)")
         act_total = act_total_with_extra - warranty_cost - afterwork_cost
         act_cost = {}
 
@@ -119,7 +119,7 @@ if est_cost and act_cost:
     summary_df["Difference (%)"] = summary_df["Difference (%)"].apply(lambda x: f"{x:.2f}%")
     st.dataframe(summary_df, use_container_width=True)
 else:
-    st.info("Không có dữ liệu chi tiết để hiển thị bảng so sánh từng hạng mục.")
+    st.info("There is no detailed data to show a comparison table for each item category.c.")
 
 # === Final Summary ===
 st.markdown("### 3. Final Comparison")
@@ -139,8 +139,8 @@ final_df = pd.DataFrame({
         warranty_cost,
         afterwork_cost,
         act_total_with_extra,
-        act_total_with_extra - est_total,
-        round((act_total_with_extra - est_total) / est_total * 100, 2) if est_total != 0 else 0.0
+        est_total - act_total_with_extra,
+        round((est_total - act_total_with_extra) / est_total * 100, 2) if est_total != 0 else 0.0
     ]
 })
 
