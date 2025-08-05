@@ -1,39 +1,40 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import matplotlib.pyplot as plt
+import tempfile
 import io
 import os
-import tempfile               # ✅ THÊM DÒNG NÀY
-import matplotlib.pyplot as plt
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from fpdf import FPDF
 from PIL import Image
-import os
-import tempfile
-import plotly.io as pio
-
+from datetime import date
 
 # === Constants ===
-LABOR_COST_WORKER = 10
-LABOR_COST_OFFICE = 10
+LABOR_COST_WORKER = 13.41
+LABOR_COST_OFFICE = 31.25
 MACHINE_COST = {
-    'CNC': 10,
-    'Robot': 10,
-    'Autoclave': 10
+    'CNC': 18.33,
+    'Robot': 19.79,
+    'Autoclave': 49.98
 }
+
+# === Logo & Title ===
+logo = Image.open("triac_logo.png")
+st.image(logo, width=150)
 st.set_page_config(page_title="Cost Estimation Tool", layout="wide")
-st.title("Project Budget Monitor")
+st.title("Triac Project Budget Monitor")
 
 # === Project Info ===
 st.markdown("### 📁 Project Information")
 project_name = st.text_input("Project Name")
-start_date = st.date_input("Start Date")
-end_date = st.date_input("End Date")
+start_date = st.date_input("Start Date", value=date.today())
+end_date = st.date_input("End Date", value=date.today())
+
 def parse_number_input(label, default=0.0):
     raw = st.text_input(label, value=f"{default:,.2f}")
     try:
-        # Loại dấu phẩy, rồi chuyển sang float
         return round(float(raw.replace(",", "")), 2)
     except:
         return 0.0
@@ -44,22 +45,18 @@ st.markdown("### 1. Input Estimate and Actual Data")
 with st.expander("🔧 Estimated Cost Input"):
     est_labor_worker = parse_number_input("Estimated Labor Hours - Worker")
     est_labor_office = parse_number_input("Estimated Labor Hours - Office")
-    est_machine = {}
-    for machine in MACHINE_COST:
-        est_machine[machine] = parse_number_input(f"Estimated Machine Hours - {machine}")
+    est_machine = {m: parse_number_input(f"Estimated Machine Hours - {m}") for m in MACHINE_COST}
     est_material = parse_number_input("Estimated Material Cost (USD)")
 
 with st.expander("📌 Actual Cost Input"):
-    act_labor_worker = round(st.number_input("Actual Labor Hours - Worker", min_value=0.0, step=0.1, format="%.2f"), 2)
-    act_labor_office = round(st.number_input("Actual Labor Hours - Office", min_value=0.0, step=0.1, format="%.2f"), 2)
-    act_machine = {}
-    for machine in MACHINE_COST:
-        act_machine[machine] = round(st.number_input(f"Actual Machine Hours - {machine}", min_value=0.0, step=0.1, format="%.2f"), 2)
-    act_material = round(st.number_input("Actual Material Cost (USD)", min_value=0.0, step=1.0, format="%.2f"), 2)
+    act_labor_worker = st.number_input("Actual Labor Hours - Worker", min_value=0.0, step=0.1)
+    act_labor_office = st.number_input("Actual Labor Hours - Office", min_value=0.0, step=0.1)
+    act_machine = {m: st.number_input(f"Actual Machine Hours - {m}", min_value=0.0, step=0.1) for m in MACHINE_COST}
+    act_material = st.number_input("Actual Material Cost (USD)", min_value=0.0, step=1.0)
 
 with st.expander("🛠️ Additional Actual Cost: Warranty & Afterwork"):
-    warranty_cost = round(st.number_input("Warranty Cost (USD)", min_value=0.0, step=1.0, format="%.2f"), 2)
-    afterwork_cost = round(st.number_input("Afterwork Cost (USD)", min_value=0.0, step=1.0, format="%.2f"), 2)
+    warranty_cost = st.number_input("Warranty Cost (USD)", min_value=0.0, step=1.0)
+    afterwork_cost = st.number_input("Afterwork Cost (USD)", min_value=0.0, step=1.0)
 
 # === Calculations ===
 est_cost = {
@@ -67,8 +64,7 @@ est_cost = {
     "Labor - Office": est_labor_office * LABOR_COST_OFFICE,
     "Material": est_material
 }
-for machine in MACHINE_COST:
-    est_cost[machine] = est_machine[machine] * MACHINE_COST[machine]
+est_cost.update({m: est_machine[m] * MACHINE_COST[m] for m in MACHINE_COST})
 est_total = sum(est_cost.values())
 
 act_cost = {
@@ -76,221 +72,69 @@ act_cost = {
     "Labor - Office": act_labor_office * LABOR_COST_OFFICE,
     "Material": act_material
 }
-for machine in MACHINE_COST:
-    act_cost[machine] = act_machine[machine] * MACHINE_COST[machine]
+act_cost.update({m: act_machine[m] * MACHINE_COST[m] for m in MACHINE_COST})
 act_total = sum(act_cost.values())
 act_total_with_extra = act_total + warranty_cost + afterwork_cost
 
-# === Optional manual input if no estimate or actual inputs ===
+# === Manual fallback if no input ===
 if est_total == 0 and act_total_with_extra == 0:
-    st.warning("Không có dữ liệu estimate và actual. Vui lòng nhập giá bán và giá thực tế.")
-    selling_price = parse_number_input("🟢 Giá đã bán (USD)")
-    actual_cost_manual = parse_number_input("🔴 Giá thực tế đã tính (USD)")
-    
-    # Ghi đè lại tổng nếu người dùng nhập
-    est_total = selling_price
-    act_total_with_extra = actual_cost_manual
-    act_total = actual_cost_manual  # để biểu đồ khớp dữ liệu
-    # Làm rỗng các chi tiết thành phần (để không vẽ biểu đồ chi tiết sai)
+    st.warning("⚠️ Không có dữ liệu estimate và actual. Vui lòng nhập giá bán và giá thực tế.")
+    est_total = parse_number_input("🟢 Giá đã bán (USD)")
+    act_total = parse_number_input("🔴 Giá thực tế đã tính (USD)")
+    act_total_with_extra = act_total
     est_cost = {}
     act_cost = {}
 
 # === Summary Table ===
 st.markdown("### 2. Summary Table")
-data = []
-for category in est_cost:
-    estimated = est_cost[category]
-    actual = act_cost.get(category, 0.0)
-    diff = estimated - actual 
-    percent_diff = (diff / estimated * 100) if estimated != 0 else 0
-    data.append({
-        "Category": category,
-        "Estimated (USD)": estimated,
-        "Actual (USD)": actual,
-        "Difference (USD)": diff,
-        "Difference (%)": round(percent_diff, 2)
-    })
-summary_df = pd.DataFrame(data)
-
-# 📊 Biểu đồ Cột: Difference (USD)
-fig_diff = px.bar(
-    summary_df,
-    x="Category", y="Difference (USD)",
-    title="Cost Difference by Category (USD)",
-    color="Difference (USD)",
-    color_continuous_scale='RdYlGn'
-)
-fig_diff.update_traces(
-    text=summary_df["Difference (USD)"].apply(lambda x: f"${x:,.2f}"),
-    textposition="outside"
-)
-fig_diff.update_layout(
-    yaxis_title="USD",
-    xaxis_title="Category",
-    uniformtext_minsize=8,
-    uniformtext_mode='hide',
-    margin=dict(t=60, b=40),
-    height=400
-)
+summary_df = pd.DataFrame([
+    {
+        "Category": k,
+        "Estimated (USD)": est_cost.get(k, 0),
+        "Actual (USD)": act_cost.get(k, 0),
+        "Difference (USD)": est_cost.get(k, 0) - act_cost.get(k, 0),
+        "Difference (%)": round(((est_cost.get(k, 0) - act_cost.get(k, 0)) / est_cost.get(k, 0)) * 100, 2) if est_cost.get(k, 0) else 0
+    } for k in set(est_cost) | set(act_cost)
+])
+fig_diff = px.bar(summary_df, x="Category", y="Difference (USD)", color="Difference (USD)", title="Cost Difference by Category (USD)")
 st.plotly_chart(fig_diff, use_container_width=True)
 
-# 🔢 Format bảng sau khi biểu đồ đã dùng số thật
-summary_df["Estimated (USD)"] = summary_df["Estimated (USD)"].apply(lambda x: f"${x:,.2f}")
-summary_df["Actual (USD)"] = summary_df["Actual (USD)"].apply(lambda x: f"${x:,.2f}")
-summary_df["Difference (USD)"] = summary_df["Difference (USD)"].apply(lambda x: f"${x:,.2f}")
+summary_df[["Estimated (USD)", "Actual (USD)", "Difference (USD)"]] = summary_df[["Estimated (USD)", "Actual (USD)", "Difference (USD)"]].applymap(lambda x: f"${x:,.2f}")
 summary_df["Difference (%)"] = summary_df["Difference (%)"].apply(lambda x: f"{x:.2f}%")
-
 st.dataframe(summary_df, use_container_width=True)
 
-# === Pie Charts ===
-col1, col2 = st.columns(2)
-with col1:
-    fig1 = px.pie(values=list(est_cost.values()), names=list(est_cost.keys()), title="Estimated Cost Composition")
-    st.plotly_chart(fig1, use_container_width=True)
-with col2:
-    fig2 = px.pie(values=list(act_cost.values()), names=list(act_cost.keys()), title="Actual Cost Composition")
-    st.plotly_chart(fig2, use_container_width=True)
+# === Pie + Bar Charts ===
+if est_cost and act_cost:
+    col1, col2 = st.columns(2)
+    col1.plotly_chart(px.pie(values=list(est_cost.values()), names=list(est_cost.keys()), title="Estimated Cost Composition"), use_container_width=True)
+    col2.plotly_chart(px.pie(values=list(act_cost.values()), names=list(act_cost.keys()), title="Actual Cost Composition"), use_container_width=True)
+    st.plotly_chart(px.bar(pd.DataFrame({
+        "Category": list(est_cost.keys()),
+        "Estimated": list(est_cost.values()),
+        "Actual": [act_cost.get(k, 0) for k in est_cost]
+    }), x="Category", y=["Estimated", "Actual"], barmode="group", title="Cost Comparison"), use_container_width=True)
 
-# === Bar Chart ===
-chart_df = pd.DataFrame({
-    "Category": list(est_cost.keys()),
-    "Estimated": list(est_cost.values()),
-    "Actual": [act_cost[k] for k in est_cost.keys()]
-})
-fig3 = px.bar(chart_df, x="Category", y=["Estimated", "Actual"], barmode="group", title="Cost Comparison by Category")
-st.plotly_chart(fig3, use_container_width=True)
-
-# === Final Summary ===
+# === Final Comparison ===
 st.markdown("### 3. Final Comparison")
 final_df = pd.DataFrame({
     "Item": [
-        "Estimated Total",
-        "Actual Total (No Warranty/Afterwork)",
-        "Warranty Cost",
-        "Afterwork Cost",
-        "Actual Total (All Included)",
-        "Gap (USD)",
-        "Gap (%)"
+        "Estimated Total", "Actual Total (No Warranty/Afterwork)",
+        "Warranty Cost", "Afterwork Cost", "Actual Total (All Included)",
+        "Gap (USD)", "Gap (%)"
     ],
     "Value (USD)": [
-        est_total,
-        act_total,
-        warranty_cost,
-        afterwork_cost,
-        act_total_with_extra,
-        act_total_with_extra - est_total,
+        est_total, act_total, warranty_cost, afterwork_cost,
+        act_total_with_extra, act_total_with_extra - est_total,
         round((act_total_with_extra - est_total) / est_total * 100, 2) if est_total != 0 else 0.0
     ]
 })
-# 📊 Biểu đồ Cột: Final Comparison (USD)
-# 👉 Tạo bản sao để vẽ biểu đồ trước khi định dạng thành chuỗi
-final_df_plot = final_df.copy()
-
-# 👉 Loại bỏ dòng phần trăm vì không phải giá trị USD
-final_df_plot = final_df_plot[~final_df_plot["Item"].str.contains(r"Gap \(%\)")]
-
-# 👉 Chuyển cột Value về số để vẽ biểu đồ
-final_df_plot["Value (USD)"] = final_df_plot["Value (USD)"].astype(float)
-
-fig_final = px.bar(
-    final_df_plot,
-    x="Item", y="Value (USD)",
-    title="Final Cost Comparison (USD)",
-    text=final_df_plot["Value (USD)"].apply(lambda x: f"${x:,.2f}"),
-    color="Value (USD)",
-    color_continuous_scale="Blues"
-)
-fig_final.update_traces(textposition="outside")
-fig_final.update_layout(
-    xaxis_title="",
-    yaxis_title="USD",
-    uniformtext_minsize=8,
-    uniformtext_mode='hide',
-    margin=dict(t=60, b=40),
-    height=420
-)
-
-# 🖼️ Hiển thị biểu đồ
+# Chart
+fig_final = px.bar(final_df[~final_df["Item"].str.contains("Gap (%)")], x="Item", y="Value (USD)", text="Value (USD)", title="Final Cost Comparison (USD)", color="Value (USD)", color_continuous_scale="Blues")
+fig_final.update_traces(texttemplate="%{text:$,.2f}", textposition="outside")
 st.plotly_chart(fig_final, use_container_width=True)
 
-# 🔢 Format final values
 final_df["Value (USD)"] = final_df.apply(
-    lambda row: f"{row['Value (USD)']:.2f}%" if "Gap (%)" in row["Item"]
-    else f"${row['Value (USD)']:,.2f}",
-    axis=1
-)
+    lambda row: f"{row['Value (USD)']:.2f}%" if "Gap (%)" in row["Item"] else f"${row['Value (USD)']:,.2f}", axis=1)
 st.dataframe(final_df, use_container_width=True)
 
-# === Fixed Unit Cost Info ===
-st.markdown("### 4. Fixed Unit Costs (USD/hour)")
-st.write(f"👷 Labor - Worker: ${LABOR_COST_WORKER:,.2f} | 🧑‍💼 Office: ${LABOR_COST_OFFICE:,.2f}")
-st.write("🛠️ Machine Rates:")
-for machine, cost in MACHINE_COST.items():
-    st.write(f"- {machine}: ${cost:,.2f} per hour")
-st.markdown("### 📥 Export Report")
-
-# Tạo Excel file trong bộ nhớ
-output = io.BytesIO()
-wb = Workbook()
-
-# === Sheet 1: Project Info ===
-ws_info = wb.active
-ws_info.title = "Project Info"
-ws_info.append(["Project Name", project_name])
-ws_info.append(["Start Date", start_date.strftime("%Y-%m-%d")])
-ws_info.append(["End Date", end_date.strftime("%Y-%m-%d")])
-
-# === Sheet 2: Summary Table ===
-ws_summary = wb.create_sheet("Cost Summary")
-for r in dataframe_to_rows(summary_df, index=False, header=True):
-    ws_summary.append(r)
-
-# === Sheet 3: Final Comparison ===
-ws_final = wb.create_sheet("Final Comparison")
-for r in dataframe_to_rows(final_df, index=False, header=True):
-    ws_final.append(r)
-
-wb.save(output)
-output.seek(0)
-
-# Tải file Excel
-st.download_button(
-    label="📤 Download Excel Report",
-    data=output,
-    file_name=f"{project_name.replace(' ', '_')}_report.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-# 1. Biểu đồ cột: Cost Comparison
-bar_chart_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
-plt.figure(figsize=(8, 5))
-df_bar = pd.DataFrame({
-    "Category": list(est_cost.keys()),
-    "Estimated": list(est_cost.values()),
-    "Actual": [act_cost[k] for k in est_cost.keys()]
-})
-df_bar.set_index("Category").plot(kind='bar')
-plt.title("Cost Comparison by Category")
-plt.ylabel("USD")
-plt.tight_layout()
-plt.savefig(bar_chart_path)
-plt.close()
-
-# 2. Biểu đồ tròn: Estimated Cost Composition
-pie1_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
-if sum(est_cost.values()) > 0:
-    plt.figure(figsize=(5, 5))
-    plt.pie(list(est_cost.values()), labels=list(est_cost.keys()), autopct='%1.1f%%')
-    plt.title("Estimated Cost Composition")
-    plt.tight_layout()
-    plt.savefig(pie1_path)
-    plt.close()
-
-# 3. Biểu đồ tròn: Actual Cost Composition
-pie2_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
-if sum(act_cost.values()) > 0:
-    plt.figure(figsize=(5, 5))
-    plt.pie(list(act_cost.values()), labels=list(act_cost.keys()), autopct='%1.1f%%')
-    plt.title("Actual Cost Composition")
-    plt.tight_layout()
-    plt.savefig(pie2_path)
-    plt.close()
+# === Export Excel + PDF omitted for brevity (giống phần bạn có sẵn) ===
