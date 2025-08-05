@@ -81,6 +81,20 @@ for machine in MACHINE_COST:
 act_total = sum(act_cost.values())
 act_total_with_extra = act_total + warranty_cost + afterwork_cost
 
+# === Optional manual input if no estimate or actual inputs ===
+if est_total == 0 and act_total_with_extra == 0:
+    st.warning("Không có dữ liệu estimate và actual. Vui lòng nhập giá bán và giá thực tế.")
+    selling_price = parse_number_input("🟢 Giá đã bán (USD)")
+    actual_cost_manual = parse_number_input("🔴 Giá thực tế đã tính (USD)")
+    
+    # Ghi đè lại tổng nếu người dùng nhập
+    est_total = selling_price
+    act_total_with_extra = actual_cost_manual
+    act_total = actual_cost_manual  # để biểu đồ khớp dữ liệu
+    # Làm rỗng các chi tiết thành phần (để không vẽ biểu đồ chi tiết sai)
+    est_cost = {}
+    act_cost = {}
+
 # === Summary Table ===
 st.markdown("### 2. Summary Table")
 data = []
